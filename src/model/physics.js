@@ -83,7 +83,9 @@ export function torque(theta, pairs, n) {
  * Second derivatives of U_ij:
  *   ∂²/∂θ_i²   = coeff * [ -cos(θ_i-θ_j) + 3 cos(θ_i-φ) cos(θ_j-φ) ]
  *   ∂²/∂θ_j²   = coeff * [ -cos(θ_i-θ_j) + 3 cos(θ_i-φ) cos(θ_j-φ) ]
- *   ∂²/∂θ_i∂θ_j= coeff * [  cos(θ_i-θ_j) + 3 sin(θ_i-φ) sin(θ_j-φ) ]
+*   ∂²/∂θ_i∂θ_j= coeff * [  cos(θ_i-θ_j) - 3 sin(θ_i-φ) sin(θ_j-φ) ]
+* (the cross term follows from ∂/∂θ_j of ∂U_ij/∂θ_i above: the derivative of
+*  3 sin(θ_i-φ) cos(θ_j-φ) w.r.t. θ_j is -3 sin(θ_i-φ) sin(θ_j-φ)).
  */
 export function hessian(theta, pairs, n) {
     const H = new Array(n);
@@ -95,7 +97,7 @@ export function hessian(theta, pairs, n) {
         const ai = ti - p.phi,
             aj = tj - p.phi;
         const diag = p.coeff * (-c + 3 * Math.cos(ai) * Math.cos(aj));
-        const cross = p.coeff * (c + 3 * Math.sin(ai) * Math.sin(aj));
+        const cross = p.coeff * (c - 3 * Math.sin(ai) * Math.sin(aj));
         H[p.i][p.i] += diag;
         H[p.j][p.j] += diag;
         H[p.i][p.j] += cross;

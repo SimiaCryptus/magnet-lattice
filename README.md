@@ -1,101 +1,100 @@
 # Magnet Lattice Toy
 
-Browser-based design & simulation of a 3D-printed rotating-magnet toy.
-See `idea.md` for the full specification.
+A little browser toy for exploring what happens when you scatter a bunch
+of spinning magnets across a grid and let them fight it out.
 
-## Running the app
+Open `index.html` in a local web server (see the technical README if you
+want the exact commands) and you'll get a blank canvas, a grid, and three
+modes to play with: **Draw**, **Simulate**, and **Analyze**.
 
-No build step. Serve the folder statically and open `index.html`:
+## The idea
 
-```sh
-# from the repository root
-cd experiments/magnet-lattice
-python3 -m http.server 8000
-# then open http://localhost:8000/
-```
+Picture a pegboard where every peg is a small magnetic disk, standing
+upright, free to spin in place but pinned so it can't slide around. Each
+disk is a tiny compass needle. Put two of them near each other and they'll
+tug at each other's orientation — just like two magnets on a table will
+twist to align north-to-south. Put down a whole grid of them and you get a
+little ecosystem of these tugs-of-war happening all at once.
 
-(ES modules require a server; opening `index.html` via `file://` will not work.)
+This project lets you:
 
-## Usage
+- **Draw** an arrangement — click on grid cells to drop a magnet, drag to
+  set which way it's initially pointing.
+- **Simulate** what happens when you let go — the magnets spin, wobble,
+  and settle (or oscillate forever) as their invisible forces pull on
+  each other. You can dial in how strong the coupling is, how heavy the
+  disks feel (inertia), how much friction/damping there is, and watch
+  energy and momentum readouts update live.
+- **Analyze** the arrangement — find its resting (lowest-energy) state,
+  and see the "coupling matrix," a color-coded map of how strongly every
+  magnet is entangled with every other one. From there you can compute
+  the natural resonant patterns ("normal modes") the lattice likes to
+  vibrate in, and watch an animation of any one of them.
+- **Map the landscape** — sweep many random starts to catalogue every
+   stable arrangement, then probe how far each one can be pushed (per
+   magnet, per normal mode and along random directions) before it tips
+   into another. The result is drawn as a transition graph: states placed
+   by energy, arrows weighted by how often a push led there and labelled
+   with the energy it took.
 
-**View controls (all modes):** right/middle-drag to pan, mouse-wheel to zoom
-about the cursor, two-finger pinch on touch screens, **Reset View** button or
-<kbd>0</kbd> to recentre.
-**⚙ Settings** opens the configuration dialog (grid pitch, grid extent,
-snap, dipole strength `m`, sub-steps per frame, id labels). The arrangement,
-parameters, simulation controls and camera are persisted to `localStorage`
-and restored on reload ("Forget saved state" in Settings clears them).
+You can also copy your arrangement out as a small chunk of JSON text (and
+paste one back in), so you can save interesting layouts, share them, or
+tweak them by hand.
 
-1. **Draw** mode — click an empty cell to add a magnet, click a magnet to
-   remove it. Drag a magnet to set its angle (hold <kbd>Shift</kbd> to snap
-   to 15°). Placing and dragging in one gesture orients the new magnet.
-2. **Simulate** mode — Play/Step/Reset the coupled-dipole dynamics
-   (<kbd>Space</kbd> toggles play). Tune coupling `k`, inertia `I`,
-   damping `γ`, and timestep `h`; choose the Störmer–Verlet or variational
-   (Newton) integrator. Drag a magnet to grab it and re-orient it while the
-   rest of the system keeps evolving; the energy-drift readout re-bases when
-   you let go. Left-drag on empty space pans.
-3. **Analyze** mode — relax to equilibrium, compute the coupling-matrix
-    heatmap and normal-mode spectrum, and animate a selected mode. Click a
-    bar in the spectrum to select that mode; hover a cell of the coupling
-    matrix to highlight the two coupled magnets on the scene and read
-    `C_ij` / `H_ij`. Unstable modes (negative Hessian eigenvalue) are flagged.
-    **Sweep** relaxes from structured seeds plus many random initial
-    conditions, keeps only Hessian-positive minima, merges states related by
-    the lattice's rotation/reflection symmetries or a global dipole flip, and
-    auto-tags each (ferromagnetic, checkerboard antiferromagnetic, vortex,
-    zero net moment, soft). Click a catalog entry to load it.
+## Why bother with the physics?
 
-Use **Export**/**Import** to copy/paste arrangements as JSON.
+Under the hood, each magnet is described by a single number: the angle
+it's pointing. The energy between any two magnets follows the real
+physics formula for dipole-dipole interaction (the same math that
+describes how two bar magnets attract or repel depending on their
+relative orientation). From there, standard tools from classical
+mechanics — the Lagrangian, torques, and a numerically careful
+"symplectic" integrator — are used to simulate how the whole system
+evolves over time without slowly leaking or gaining energy the way naive
+simulations often do.
 
-## Physics
+The point isn't just "get a cool animation." A lot of care went into
+making sure the simulation is physically trustworthy: derivatives are
+checked against numerical approximations, energy conservation is
+tested over long runs, and the eigen-analysis (used to find resonances)
+is validated against known cases. If you nudge a slider and see the
+energy readout drift wildly, that's a bug — not "just how simulations
+are."
 
-Each magnet is a fixed-position disk with one rotational DOF `θ`.
-Pairwise dipole energy:
+## Why is this interesting?
 
-```
-U_ij = (k / r³) [ μ_i·μ_j − 3 (μ_i·n)(μ_j·n) ]
-```
+Coupled dipole/oscillator systems like this show up all over physics and
+engineering — in mechanical metamaterials, in arrays of coupled
+pendulums, in models of magnetic domains, even loosely in neural and
+spin-lattice models. Watching a lattice of these magnets settle into
+a pattern, or ring like a bell at a particular resonant frequency, is a
+small, hands-on way to get an intuition for ideas like:
 
-folded into the compact trig form (see `src/model/physics.js`):
+- **energy minimization** — systems tend toward configurations that
+  minimize potential energy (here, magnets aligning head-to-tail),
+- **normal modes** — complex vibrations of a coupled system can be
+  broken down into a handful of simple, independent "shapes" of motion,
+- **symplectic integration** — why some numerical methods for simulating
+  physics are much better than others at getting long-term behavior
+  right.
 
-```
-U_ij = (k m² / r³) [ cos(θ_i − θ_j) − 3 cos(θ_i − φ) cos(θ_j − φ) ]
-```
+It's also just satisfying to watch a scattered mess of magnets spin
+around and click into a tidy, aligned pattern.
 
-with `φ` the angle of the separation vector. **Distances are measured in
-grid-cell units**, so nearest neighbours couple with strength exactly `k·m²`
-and the pixel pitch only affects drawing. Analytic gradient and Hessian are
-provided and validated against finite differences.
+## Who is this for?
 
-The variational integrator is the implicit-midpoint discrete Lagrangian
-solved with Newton on the analytic Hessian. Viscous damping enters through
-discrete Lagrange–d'Alembert forces, so `γ > 0` works with both integrators.
+- Anyone who likes physics toys and wants to fiddle with sliders and
+  watch things wiggle.
+- Students (or the perpetually curious) wanting a visual, interactive
+  companion to studying dipole interactions, Lagrangian mechanics, or
+  normal-mode analysis.
+- Makers designing an actual 3D-printed version of this toy — this app
+  doubles as a design tool: lay out where the magnets go, see whether
+  the arrangement is stable, and check what its dynamics would look like
+  before committing to plastic and magnets.
+- Anyone who enjoys a good rabbit hole — this one starts with "spinning
+  magnets" and ends up brushing against eigenvalues, energy
+  conservation, and resonance.
 
-## Tests
-
-```sh
-node test/run.js
-```
-
-Covers:
-
-- pair coefficients, analytic gradient / Hessian vs finite differences,
-- bounded & non-secular energy drift for both integrators, O(h²) scaling,
-- damping dissipation (both integrators) settling into the known minimum,
-- LU solve & Jacobi eigen-solver on known matrices,
-- 2-magnet equilibrium (to ~1e-15) and closed-form normal modes ω = 1, √3,
-- lattice placement/hit-testing rules and JSON round-trip + validation.
-
-## Module map
-
-| Module                | Responsibility                                            |
-| --------------------- | --------------------------------------------------------- |
-| `model/lattice.js`    | magnet set, grid ↔ world mapping, bounds & hit-testing    |
-| `model/physics.js`    | energy, gradient/torque, Hessian (analytic + FD)          |
-| `model/integrator.js` | Verlet + variational (Newton, with damping) steppers      |
-| `model/analysis.js`   | relaxation, eigenproblem, coupling, symmetries, minima sweep |
-| `io/serialize.js`     | versioned JSON import/export + validation                 |
-| `ui/canvas.js`        | grid / dipole rendering, pan-zoom camera                  |
-| `ui/heatmap.js`       | coupling matrix + spectrum rendering and hit-testing      |
-| `math/linalg.js`      | LU solve, symmetric Jacobi eigen                          |
+See `idea.md` for the full technical specification, and the main
+`README.md` for how to actually run and test the code.

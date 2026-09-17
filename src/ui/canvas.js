@@ -79,10 +79,19 @@ export class SceneRenderer {
      * opts.modeVec   — optional eigenvector to overlay as wedges
      * opts.hover     — index of hovered magnet (or -1)
       * opts.highlight — optional array of magnet indices to ring (coupling-matrix hover)
+     * opts.coupling  — optional n×n coupling matrix (normalised Hessian C) drawn as lines
+     *                  between the cores: red C_ij > 0, blue C_ij < 0, opacity/width ∝ |C_ij|
      * opts.showLabels— draw magnet ids
      */
     render(lattice, opts = {}) {
-         const {angles = null, modeVec = null, hover = -1, highlight = null, showLabels = true} = opts;
+        const {
+            angles = null,
+            modeVec = null,
+            hover = -1,
+            highlight = null,
+            coupling = null,
+            showLabels = true,
+        } = opts;
         const ctx = this.ctx;
         ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
         ctx.clearRect(0, 0, this.w, this.h);
@@ -145,8 +154,48 @@ export class SceneRenderer {
             ctx.stroke();
         }
 
-        // Magnets.
         const R = pitch * 0.36 * z;
+        // Coupling lines (analysis mode). Drawn under the magnets, disk-edge to disk-edge.
+        if (coupling) {
+            const n = Math.min(coupling.length, lattice.magnets.length);
+            const centres = new Array(n);
+            for (let i = 0; i < n; i++) {
+                const [wx, wy] = lattice.cellToWorld(lattice.magnets[i].cell);
+                centres[i] = this.worldToScreen(wx, wy);
+            }
+            const hl = highlight && highlight.length === 2 && highlight[0] !== highlight[1] ? highlight : null;
+            ctx.lineCap = 'round';
+            for (let i = 0; i < n; i++) {
+                for (let j = i + 1; j < n; j++) {
+                    const v = coupling[i][j];
+                    const a = Math.min(1, Math.abs(v));
+                    const isHl = hl && ((hl[0] === i && hl[1] === j) || (hl[0] === j && hl[1] === i));
+                    if (a < 0.03 && !isHl) continue; // far pairs (1/r³) would only add clutter
+                    const [x0, y0] = centres[i],
+                        [x1, y1] = centres[j];
+                    const dx = x1 - x0,
+                        dy = y1 - y0;
+                    const len = Math.hypot(dx, dy);
+                    if (len <= 2 * R) continue;
+                    const ux = dx / len,
+                        uy = dy / len;
+                    ctx.beginPath();
+                    ctx.moveTo(x0 + ux * R, y0 + uy * R);
+                    ctx.lineTo(x1 - ux * R, y1 - uy * R);
+                    if (isHl) {
+                        ctx.strokeStyle = '#fc6';
+                        ctx.lineWidth = 3;
+                    } else {
+                        const alpha = 0.15 + 0.75 * a;
+                        ctx.strokeStyle = v > 0 ? `rgba(230,90,90,${alpha})` : `rgba(90,130,230,${alpha})`;
+                        ctx.lineWidth = 0.75 + 3 * a;
+                    }
+                    ctx.stroke();
+                }
+            }
+            ctx.lineCap = 'butt';
+        }
+        // Magnets.
         const lw = Math.max(1, Math.min(3, R * 0.14));
         const headLen = Math.min(8, R * 0.5);
         const margin = R + 24;

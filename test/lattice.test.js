@@ -120,4 +120,59 @@ describe('io: JSON round-trip & validation', () => {
         expectThrow((d) => d.magnets.push({id: 0, cell: [1, 0], theta: 0}), /Duplicate/);
         expectThrow((d) => (d.params.k = 'x'), /params\.k/);
     });
+    it('embeds and restores a stable-state catalog with basin data', () => {
+        const l = new Lattice(32, true, 4);
+        l.add([0, 0], 0);
+        l.add([1, 0], 0);
+        const params = {k: 1, I: 1, gamma: 0, m: 1};
+        const entries = [
+            {
+                id: 1,
+                theta: new Float64Array([0, 0]),
+                energy: -2,
+                lambdaMin: 1,
+                hits: 12,
+                randomHits: 9,
+                orbit: 2,
+                stabilizer: 8,
+                saddle: false,
+                soft: false,
+                tags: ['ferromagnetic (all aligned)'],
+                basin: {
+                    singles: [{i: 0, sign: 1, radius: 3.14, escaped: true, target: -1}],
+                    modes: [{k: 0, lambda: 1, sign: -1, radius: 2.22, escaped: true, target: 1}],
+                    minSingleRadius: 3.14,
+                    minModeRadius: 2.22,
+                    targets: {'-1': 1, '1': 1},
+                },
+            },
+        ];
+        const text = exportJSON(l, params, {catalog: {randomStarts: 30, entries}});
+        const doc = importJSON(text);
+        assert(doc.catalog && doc.catalog.randomStarts === 30, 'randomStarts round-trips');
+        assert(doc.catalog.entries.length === 1);
+        const e = doc.catalog.entries[0];
+        assert(Array.isArray(e.theta) && e.theta.length === 2);
+        assert(e.hits === 12 && e.randomHits === 9 && e.orbit === 2);
+        assert(e.tags[0] === 'ferromagnetic (all aligned)');
+        assert(e.basin.singles[0].target === -1 && e.basin.modes[0].lambda === 1);
+         assert(e.basin.singles[0].monotone === true && e.basin.singles[0].barrier === null, 'record defaults');
+         assert(Array.isArray(e.basin.randoms) && e.basin.randoms.length === 0, 'randoms default to []');
+         assert(e.basin.volumeFraction === null && e.basin.nonMonotone === 0, 'summary defaults');
+        assertClose(e.basin.minModeRadius, 2.22, 1e-15);
+        assert(e.basin.targets['1'] === 1 && e.basin.targets['-1'] === 1);
+        // theta length must match the magnet count
+        const bad = JSON.parse(text);
+        bad.catalog.entries[0].theta = [0];
+        let msg = null;
+        try {
+            importJSON(JSON.stringify(bad));
+        } catch (err) {
+            msg = err.message;
+        }
+        assert(msg && /theta/.test(msg), `expected a theta error, got "${msg}"`);
+        // documents without a catalog normalise to null, and none is written when absent
+        assert(importJSON(exportJSON(l, params)).catalog === null);
+        assert(!('catalog' in JSON.parse(exportJSON(l, params))));
+    });
 });

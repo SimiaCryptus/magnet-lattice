@@ -7,142 +7,193 @@
         <link rel="stylesheet" href="experiments-magnet-lattice-index.css" />
     </head>
     <body>
-        <div id="sidebar">
-            <h1>🧲 Magnet Lattice</h1>
-            <div class="mode-tabs">
+        <aside id="sidebar">
+            <header class="brand">
+                <div class="logo">🧲</div>
+                <div>
+                    <h1>Magnet Lattice</h1>
+                    <div class="subtitle">coupled dipoles on a grid</div>
+                </div>
+            </header>
+            <nav class="mode-tabs">
                 <button data-mode="draw" class="active">Draw</button>
                 <button data-mode="sim">Simulate</button>
                 <button data-mode="analysis">Analyze</button>
-            </div>
+            </nav>
             <div class="toolbar">
-                <button class="action" id="settings">⚙ Settings</button>
-                <button class="action" id="reset-view">Reset View</button>
+                <button class="action secondary" id="settings">⚙ Settings</button>
+                <button class="action secondary" id="reset-view">⌖ Reset view</button>
             </div>
 
             <div id="panel-draw">
-                <h2>Draw</h2>
-                <p class="hint">
-                    Click an empty cell to add a magnet, click a magnet to remove it. Drag a
-                    magnet to set its angle (hold Shift to snap to 15°).
-                </p>
-                <p class="hint">Right/middle-drag to pan, mouse-wheel to zoom, <kbd>0</kbd> resets the view.</p>
-                <div class="readout">
-                    Magnets: <span id="count">0</span><br />
-                    Grid: <span id="grid-info"></span>
-                </div>
-                <button class="action" id="clear">Clear All</button>
+                <section class="card">
+                    <h2>Draw</h2>
+                    <p class="hint">
+                        Click an empty cell to add a magnet, click a magnet to remove it. Drag a
+                        magnet to set its angle (hold <kbd>Shift</kbd> to snap to 15°).
+                    </p>
+                    <p class="hint">
+                        Right/middle-drag to pan, mouse-wheel to zoom, <kbd>0</kbd> resets the view.
+                    </p>
+                    <div class="stats">
+                        <div><span class="lbl">Magnets</span><span class="v" id="count">0</span></div>
+                        <div><span class="lbl">Grid</span><span class="v" id="grid-info"></span></div>
+                    </div>
+                    <div class="toolbar">
+                        <button class="action danger" id="clear">Clear all</button>
+                    </div>
+                </section>
             </div>
 
             <div id="panel-sim" style="display: none">
-                <h2>Simulation</h2>
-                <div>
-                    <button class="action" id="play">▶ Play</button>
-                    <button class="action" id="step">Step</button>
-                    <button class="action" id="reset">Reset</button>
-                </div>
-                <p class="hint">
-                    Drag a magnet to grab it and set its orientation while the simulation runs.
-                    <kbd>Space</kbd> toggles play.
-                </p>
-                <div class="row">
-                    <label>Coupling k</label
-                    ><input type="range" id="k" min="0.1" max="10" step="0.1" value="1" /><span
-                        class="val"
-                        id="k-val"
-                        >1.0</span
-                    >
-                </div>
-                <div class="row">
-                    <label>Inertia I</label
-                    ><input type="range" id="I" min="0.1" max="10" step="0.1" value="1" /><span
-                        class="val"
-                        id="I-val"
-                        >1.0</span
-                    >
-                </div>
-                <div class="row">
-                    <label>Damping γ</label
-                    ><input type="range" id="gamma" min="0" max="2" step="0.01" value="0" /><span
-                        class="val"
-                        id="gamma-val"
-                        >0.00</span
-                    >
-                </div>
-                <div class="row">
-                    <label>Timestep h</label
-                    ><input
-                        type="range"
-                        id="h"
-                        min="0.001"
-                        max="0.1"
-                        step="0.001"
-                        value="0.02"
-                    /><span class="val" id="h-val">0.020</span>
-                </div>
-                <div class="row">
-                    <label>Integrator</label>
-                    <select id="integrator">
-                        <option value="verlet">Störmer–Verlet</option>
-                        <option value="variational">Variational (Newton)</option>
-                    </select>
-                </div>
-                <h2>Diagnostics</h2>
-                <div class="readout">
-                    t = <span id="t-val">0</span><br />
-                    E = <span id="E-val">0</span><br />
-                    T = <span id="T-val">0</span><br />
-                    U = <span id="U-val">0</span><br />
-                    L = <span id="L-val">0</span><br />
-                    ΔE/E₀ = <span id="dE-val">0</span>
-                </div>
+                <section class="card">
+                    <h2>Simulation</h2>
+                    <div class="toolbar">
+                        <button class="action primary" id="play">▶ Play</button>
+                        <button class="action" id="step">Step</button>
+                        <button class="action" id="reset">Reset</button>
+                    </div>
+                    <p class="hint">
+                        Drag a magnet to grab it and set its orientation while the simulation runs.
+                        <kbd>Space</kbd> toggles play.
+                    </p>
+                    <div class="row">
+                        <label>Coupling k</label>
+                        <input type="range" id="k" min="0.1" max="10" step="0.1" value="1" />
+                        <span class="val" id="k-val">1.0</span>
+                    </div>
+                    <div class="row">
+                        <label>Inertia I</label>
+                        <input type="range" id="I" min="0.1" max="10" step="0.1" value="1" />
+                        <span class="val" id="I-val">1.0</span>
+                    </div>
+                    <div class="row">
+                        <label>Damping γ</label>
+                        <input type="range" id="gamma" min="0" max="2" step="0.01" value="0" />
+                        <span class="val" id="gamma-val">0.00</span>
+                    </div>
+                    <div class="row">
+                        <label>Timestep h</label>
+                        <input type="range" id="h" min="0.001" max="0.1" step="0.001" value="0.02" />
+                        <span class="val" id="h-val">0.020</span>
+                    </div>
+                    <div class="row">
+                        <label>Integrator</label>
+                        <select id="integrator">
+                            <option value="verlet">Störmer–Verlet</option>
+                            <option value="variational">Variational (Newton)</option>
+                        </select>
+                    </div>
+                </section>
+                <section class="card">
+                    <h2>Diagnostics</h2>
+                    <div class="stats grid2">
+                        <div><span class="lbl">t</span><span class="v" id="t-val">0</span></div>
+                        <div><span class="lbl">E</span><span class="v" id="E-val">0</span></div>
+                        <div><span class="lbl">T</span><span class="v" id="T-val">0</span></div>
+                        <div><span class="lbl">U</span><span class="v" id="U-val">0</span></div>
+                        <div><span class="lbl">L</span><span class="v" id="L-val">0</span></div>
+                        <div><span class="lbl">ΔE/E₀</span><span class="v" id="dE-val">0</span></div>
+                    </div>
+                </section>
             </div>
 
             <div id="panel-analysis" style="display: none">
-                <h2>Stable-state catalog</h2>
-                <p class="hint">
-                    Relaxes from many initial conditions, keeps the stable minima and merges
-                    states related by lattice rotations/reflections or a global flip. Click an
-                    entry to load it.
-                </p>
-                <div class="row">
-                    <label for="sweep-starts">Random starts</label>
-                    <input type="number" id="sweep-starts" min="1" max="5000" step="1" value="200" />
-                    <button class="action" id="sweep">Sweep</button>
-                </div>
-                <div id="catalog"></div>
-                <h2>Analysis</h2>
-                <button class="action" id="relax">Relax to Equilibrium</button>
-                <button class="action" id="analyze">Compute Modes</button>
-                <p class="hint">Dragging a magnet here changes the configuration and invalidates computed modes.</p>
-                <div id="heatmap-wrap">
-                    <h2>Coupling Matrix</h2>
-                    <canvas id="heatmap" class="small" width="280" height="280"></canvas>
-                    <h2>Eigen-spectrum</h2>
-                    <canvas id="spectrum" class="small" width="280" height="100"></canvas>
-                 <p class="hint">Click a bar to select a mode. Hover the coupling matrix to highlight the pair.</p>
-                 <div class="readout" id="heat-info"></div>
+                <section class="card">
+                    <h2>Stable states <span class="badge" id="catalog-count"></span></h2>
+                    <p class="hint">
+                        Relaxes from structured seeds and many random starts, keeps every stationary
+                        point and merges states related by a lattice rotation/reflection or a global
+                        flip. Click an entry to load it; sweeping again extends the catalog.
+                    </p>
                     <div class="row">
-                        <label>Mode</label>
-                        <input type="range" id="mode-pick" min="0" max="0" step="1" value="0" />
-                        <span class="val" id="mode-val">0</span>
+                        <label for="sweep-starts">Random starts</label>
+                        <input type="number" id="sweep-starts" min="1" max="5000" step="1" value="200" />
+                        <button class="action primary" id="sweep">Sweep</button>
                     </div>
-                    <div class="readout">
-                        ω = <span id="omega-val">0</span> <span id="stab-val"></span>
+                    <div id="catalog"></div>
+                    <div class="toolbar">
+                        <button class="action secondary" id="catalog-clear">Clear catalog</button>
                     </div>
-                    <button class="action" id="anim-mode">Animate Mode</button>
-                </div>
+                </section>
+
+                <section class="card">
+                    <h2>Transitions</h2>
+                    <p class="hint">
+                        For every stable state, bisects the smallest perturbation — per core (±), per
+                        normal mode (±) and along random directions — that escapes its basin, and where
+                        it lands. Escapes into uncatalogued minima seed a follow-up sweep. Extra probes
+                        spot-check that each ray is monotone (⚠ otherwise). Nodes sit by energy; edge
+                        width ∝ count, label = energy climbed along the ray.
+                    </p>
+                    <div class="row">
+                        <label for="basin-dirs">Random directions per state</label>
+                        <input type="number" id="basin-dirs" min="0" max="200" step="1" value="8" />
+                        <button
+                            class="action primary"
+                            id="basins"
+                            title="Map the basins of attraction of the catalogued states"
+                        >
+                            Basins
+                        </button>
+                    </div>
+                    <div id="transitions-wrap">
+                        <canvas id="graph" class="small" width="292" height="230"></canvas>
+                        <div class="readout" id="graph-info"></div>
+                        <div id="state-detail"></div>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <h2>Normal modes</h2>
+                    <div class="toolbar">
+                        <button class="action" id="relax">Relax to equilibrium</button>
+                        <button class="action primary" id="analyze">Compute modes</button>
+                    </div>
+                    <label class="check">
+                        <input type="checkbox" id="show-coupling" checked />
+                        Show coupling lines (red H<sub>ij</sub>&gt;0, blue &lt;0)
+                    </label>
+                    <p class="hint">
+                        Dragging a magnet here changes the configuration and invalidates computed modes.
+                    </p>
+                    <div id="heatmap-wrap">
+                        <h2>Coupling matrix</h2>
+                        <canvas id="heatmap" class="small" width="292" height="292"></canvas>
+                        <h2>Eigen-spectrum</h2>
+                        <canvas id="spectrum" class="small" width="292" height="100"></canvas>
+                        <p class="hint">
+                            Click a bar (or press <kbd>←</kbd>/<kbd>→</kbd>) to select a mode. Hover the
+                            coupling matrix to highlight the pair.
+                        </p>
+                        <div class="readout" id="heat-info"></div>
+                        <div class="row">
+                            <label>Mode</label>
+                            <input type="range" id="mode-pick" min="0" max="0" step="1" value="0" />
+                            <span class="val" id="mode-val">0</span>
+                        </div>
+                        <div class="readout">ω = <span id="omega-val">0</span> <span id="stab-val"></span></div>
+                        <div class="toolbar">
+                            <button class="action" id="anim-mode">Animate mode</button>
+                        </div>
+                    </div>
+                </section>
             </div>
 
-            <h2>Data (JSON)</h2>
-            <button class="action" id="export">Export</button>
-            <button class="action" id="import">Import</button>
-            <div class="status" id="status"></div>
-            <textarea id="json" spellcheck="false"></textarea>
-        </div>
+            <section class="card">
+                <h2>Data (JSON)</h2>
+                <div class="toolbar">
+                    <button class="action" id="export">Export</button>
+                    <button class="action" id="import">Import</button>
+                </div>
+                <div class="status" id="status"></div>
+                <textarea id="json" spellcheck="false"></textarea>
+            </section>
+        </aside>
 
-        <div id="main">
+        <main id="main">
             <canvas id="scene"></canvas>
-        </div>
+        </main>
 
         <dialog id="config-dialog">
             <form method="dialog">
@@ -155,9 +206,7 @@
                     <label for="cfg-extent">Grid extent (cells from centre, 0 = unbounded)</label>
                     <input type="number" id="cfg-extent" min="0" max="256" step="1" />
                 </div>
-                <div class="row">
-                    <label><input type="checkbox" id="cfg-snap" /> Snap placement to grid</label>
-                </div>
+                <label class="check"><input type="checkbox" id="cfg-snap" /> Snap placement to grid</label>
                 <div class="row">
                     <label for="cfg-m">Dipole strength m</label>
                     <input type="number" id="cfg-m" min="0.01" step="0.1" />
@@ -166,25 +215,23 @@
                     <label for="cfg-substeps">Sub-steps per animation frame</label>
                     <input type="number" id="cfg-substeps" min="1" max="64" step="1" />
                 </div>
-                <div class="row">
-                    <label><input type="checkbox" id="cfg-labels" /> Show magnet ids</label>
-                </div>
+                <label class="check"><input type="checkbox" id="cfg-labels" /> Show magnet ids</label>
                 <p class="hint">
-                    Physics measures distance in grid-cell units, so the pitch only affects
-                    drawing; nearest neighbours couple with strength k·m².
+                    Physics measures distance in grid-cell units, so the pitch only affects drawing;
+                    nearest neighbours couple with strength k·m².
                 </p>
-                 <p class="hint">
-                     Your arrangement, parameters and view are saved in this browser and restored
-                     on reload.
-                 </p>
-                 <button type="button" id="cfg-forget" class="action secondary">
-                     Forget saved state &amp; reload
-                 </button>
+                <p class="hint">
+                    Your arrangement, parameters and view are saved in this browser and restored on
+                    reload.
+                </p>
+                <button type="button" id="cfg-forget" class="action danger">
+                    Forget saved state &amp; reload
+                </button>
                 <menu>
                     <button type="submit" value="cancel" formnovalidate class="action secondary">
                         Cancel
                     </button>
-                    <button type="submit" value="ok" class="action">Apply</button>
+                    <button type="submit" value="ok" class="action primary">Apply</button>
                 </menu>
             </form>
         </dialog>

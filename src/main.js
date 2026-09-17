@@ -1,14 +1,26 @@
 // Bootstrap: mode switching, UI wiring, camera & pointer interaction (incl. pinch-zoom),
-// animation loop, localStorage persistence, coupling-matrix / spectrum interaction
-// and the stable-state sweep.
+// animation loop, localStorage persistence, coupling-matrix / spectrum interaction,
+// the stable-state sweep, basin analysis and the transition graph.
 
 import {Lattice} from './model/lattice.js';
 import {buildPairs, energy, kinetic, angularMomentum, torque} from './model/physics.js';
 import {step} from './model/integrator.js';
-import {relax, analyze, MinimaSweep} from './model/analysis.js';
+import {
+    relax,
+    analyze,
+    MinimaSweep,
+    BasinAnalysis,
+    basinFraction,
+    basinRecords,
+    describeState,
+    latticeSymmetries,
+    relinkBasinTargets,
+    transitionGraph,
+} from './model/analysis.js';
 import {exportJSON, importJSON, validate} from './io/serialize.js';
 import {SceneRenderer} from './ui/canvas.js';
 import {renderHeatmap, renderSpectrum, heatmapCellAt, spectrumIndexAt} from './ui/heatmap.js';
+import {renderTransitionGraph, graphNodeAt} from './ui/graph.js';
 
 const $ = (id) => document.getElementById(id);
 const STORAGE_KEY = 'magnet-lattice/v1';
@@ -19,7 +31,7 @@ const clampInt = (v, lo, hi, dflt) => {
 
 // ---- Global state ----
 const params = {k: 1.0, I: 1.0, gamma: 0.0, m: 1.0};
-const settings = {substeps: 4, showLabels: true};
+const settings = {substeps: 4, showLabels: true, showCoupling: true};
 const lattice = new Lattice(48, true, 8);
 const canvas = $('scene');
 const renderer = new SceneRenderer(canvas);
@@ -42,6 +54,10 @@ let catalog = []; // stable states from the last sweep
 let catalogKey = null; // {version, k, m} the catalog was computed for
 let catalogSel = -1;
 let catalogRenderedAt = 0;
+let catalogRandomStarts = 0; // uniformly random relaxations behind `catalog` (basin-fraction denominator)
+let basinJob = null; // running BasinAnalysis job
+let graphHover = null; // transition-graph node under the cursor (id, 0, -1 or null)
+let graphLayout = null; // last transition-graph layout (for hit-testing)
 let persistEnabled = true;
 
 renderer.onResize = () => draw();
@@ -106,13 +122,19 @@ function invalidateModes(silent = false) {
     if (!modeAnim) return;
     modeAnim = null;
     $('heatmap-wrap').classList.remove('show');
-    $('anim-mode').textContent = 'Animate Mode';
+    $('anim-mode').textContent = 'Animate mode';
     if (!silent) setStatus('Configuration changed — recompute modes');
 }
 
 // ---- Persistence (localStorage) --------------------------------------------
+/** Catalog (with basin data) to embed in exported documents, or null when absent/stale. */
+function catalogForExport() {
+    if (!catalog.length || catalogStale()) return null;
+    return {randomStarts: catalogRandomStarts, entries: catalog};
+}
+
 function snapshot() {
-    const doc = JSON.parse(exportJSON(lattice, params));
+    const doc = JSON.parse(exportJSON(lattice, params, {catalog: catalogForExport()}));
     // In Simulate mode persist the *designed* angles (what Reset restores), not the
     // transient dynamical state.
     if (mode === 'sim' && savedAngles && savedAngles.length === doc.magnets.length) {
@@ -163,6 +185,7 @@ function restore() {
     const s = saved.settings || {};
     settings.substeps = clampInt(s.substeps, 1, 64, settings.substeps);
     if (typeof s.showLabels === 'boolean') settings.showLabels = s.showLabels;
+    if (typeof s.showCoupling === 'boolean') settings.showCoupling = s.showCoupling;
     const sim = saved.sim || {};
     if (Number.isFinite(sim.h) && sim.h > 0) {
         $('h').value = sim.h;
@@ -435,6 +458,9 @@ window.addEventListener('keydown', (e) => {
         renderer.resetView();
         draw();
         persistSoon();
+    } else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && mode === 'analysis' && modeAnim) {
+        e.preventDefault();
+        showMode(modeAnim.idx + (e.key === 'ArrowRight' ? 1 : -1));
     }
 });
 
@@ -568,6 +594,7 @@ function updateDiagnostics() {
 // ---- Analysis controls ------------------------------------------------------
 const heatmapCv = $('heatmap');
 const spectrumCv = $('spectrum');
+const graphCv = $('graph');
 
 $('relax').addEventListener('click', () => {
     if (lattice.count === 0) return setStatus('No magnets to relax', true);
@@ -586,7 +613,7 @@ $('analyze').addEventListener('click', () => {
     $('heatmap-wrap').classList.add('show');
     $('mode-pick').max = String(lattice.count - 1);
     $('mode-pick').value = '0';
-    $('anim-mode').textContent = 'Animate Mode';
+    $('anim-mode').textContent = 'Animate mode';
     heatHover = null;
     specHover = -1;
     $('heat-info').textContent = '';
@@ -611,11 +638,16 @@ $('mode-pick').addEventListener('input', (e) => showMode(+e.target.value));
 $('anim-mode').addEventListener('click', () => {
     if (!modeAnim) return;
     modeAnim.animating = !modeAnim.animating;
-    $('anim-mode').textContent = modeAnim.animating ? 'Stop' : 'Animate Mode';
+    $('anim-mode').textContent = modeAnim.animating ? '■ Stop' : 'Animate mode';
     if (!modeAnim.animating) {
         modeAnim.phase = 0;
         draw();
     }
+});
+$('show-coupling').addEventListener('change', (e) => {
+    settings.showCoupling = e.target.checked;
+    draw();
+    persistSoon();
 });
 
 function renderSpectrumNow() {
@@ -633,7 +665,7 @@ function showMode(idx) {
     $('omega-val').textContent = modeAnim.omega[idx].toFixed(4);
     const unstable = modeAnim.values[idx] < -1e-9;
     $('stab-val').textContent = unstable ? '⚠ unstable' : '';
-    $('stab-val').style.color = unstable ? '#e77' : '#8a8';
+    $('stab-val').style.color = unstable ? '#ff6b6b' : '#8fd1a8';
     renderSpectrumNow();
     draw();
 }
@@ -706,53 +738,299 @@ function catalogStale() {
 
 function clearCatalog() {
     sweep = null;
+    basinJob = null;
     catalog = [];
     catalogKey = null;
     catalogSel = -1;
+    catalogRandomStarts = 0;
+    graphHover = null;
+    graphLayout = null;
     $('sweep').textContent = 'Sweep';
     renderCatalog();
 }
 
-$('sweep').addEventListener('click', () => {
-    if (sweep) {
-        sweep = null;
-        $('sweep').textContent = 'Sweep';
-        renderCatalog();
-        setStatus(`Sweep stopped — ${catalog.length} stable state(s) catalogued`);
-        return;
+/** Sweep ended (finished or stopped by the user); warm-started sweeps relink the basin targets. */
+function finishSweep(stopped) {
+    const s = sweep;
+    sweep = null;
+    $('sweep').textContent = 'Sweep';
+    if (s.warm) {
+        const relinked = relinkBasinTargets(catalog, latticeSymmetries(lattice.cellPositions()));
+        const found = catalog.length - s.warmBefore;
+        setStatus(
+            `Boundary exploration ${stopped ? 'stopped' : 'done'} — ${found} new state(s), ` +
+                `${relinked} transition(s) relinked`,
+        );
+    } else {
+        setStatus(
+            stopped
+                ? `Sweep stopped — ${catalog.length} stable state(s) catalogued`
+                : `Sweep complete: ${catalog.length} state(s), ${s.saddles} saddle(s), ${s.unconverged} unconverged`,
+        );
     }
-    if (lattice.count === 0) return setStatus('No magnets to sweep', true);
-    const starts = clampInt($('sweep-starts').value, 1, 5000, 200);
-    $('sweep-starts').value = starts;
+    renderCatalog();
+    persistSoon();
+}
+
+/** Warm-start a sweep from the boundary landings a basin analysis found (uncatalogued minima/saddles). */
+function startWarmSweep(seeds) {
     catalogKey = {version: lattice.version, k: params.k, m: params.m};
-    catalogSel = -1;
-    sweep = new MinimaSweep(lattice.cellPositions(), getPairs(), lattice.count, {starts});
+    sweep = new MinimaSweep(lattice.cellPositions(), getPairs(), lattice.count, {
+        starts: seeds.length,
+        catalog,
+        randomStarts: catalogRandomStarts,
+        seeds,
+    });
+    sweep.warm = true;
+    sweep.warmBefore = catalog.length;
     catalog = sweep.catalog;
     $('sweep').textContent = 'Stop';
     renderCatalog();
-    setStatus('Sweeping…');
+    setStatus(`Exploring ${seeds.length} boundary point(s) for states the random sampling missed…`);
+}
+
+$('sweep').addEventListener('click', () => {
+    if (sweep) {
+        finishSweep(true);
+        return;
+    }
+    if (lattice.count === 0) return setStatus('No magnets to sweep', true);
+    basinJob = null; // a running basin analysis is cancelled (new states may re-number its targets)
+    const starts = clampInt($('sweep-starts').value, 1, 5000, 200);
+    $('sweep-starts').value = starts;
+    // A fresh catalog gets the structured seeds; an up-to-date one is extended so hit counts
+    // (and hence the basin-fraction estimates) keep accumulating.
+    const fresh = !catalog.length || catalogStale();
+    if (fresh) {
+        catalogSel = -1;
+        catalogRandomStarts = 0;
+    }
+    catalogKey = {version: lattice.version, k: params.k, m: params.m};
+    sweep = new MinimaSweep(lattice.cellPositions(), getPairs(), lattice.count, {
+        starts,
+        catalog: fresh ? null : catalog,
+        randomStarts: fresh ? 0 : catalogRandomStarts,
+    });
+    catalog = sweep.catalog;
+    $('sweep').textContent = 'Stop';
+    renderCatalog();
+    setStatus(fresh ? 'Sweeping…' : 'Sweeping — extending the existing catalog…');
+});
+$('catalog-clear').addEventListener('click', () => {
+    clearCatalog();
+    setStatus('Catalog cleared');
+});
+$('basins').addEventListener('click', () => {
+    if (basinJob) {
+        basinJob = null;
+        renderCatalog();
+        setStatus('Basin analysis stopped (partial results kept)');
+        return;
+    }
+    if (sweep) return setStatus('Stop or finish the sweep first', true);
+    if (!catalog.length || catalogStale())
+        return setStatus('Run a sweep first — basins are mapped for the catalogued states', true);
+    const randomDirs = clampInt($('basin-dirs').value, 0, 200, 8);
+    $('basin-dirs').value = randomDirs;
+    basinJob = new BasinAnalysis(lattice.cellPositions(), getPairs(), lattice.count, catalog, {randomDirs});
+    renderCatalog();
+    setStatus(`Basin analysis: ${basinJob.total} bisection searches queued…`);
 });
 
+const fmtTarget = (t) => (t === null ? '—' : t === -1 ? 'saddle' : t === 0 ? 'new' : `#${t}`);
+const fmtSign = (s) => (s > 0 ? '+' : '−');
+const fmtOmega = (lambda) =>
+    lambda === null || lambda === undefined
+        ? '?'
+        : (lambda >= 0 ? Math.sqrt(lambda / params.I) : -Math.sqrt(-lambda / params.I)).toFixed(3);
+const el = (tag, cls, text) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+};
+
+/** Compact list of catalogued states (no transition detail — that lives in the Transitions card). */
 function renderCatalog() {
-    const el = $('catalog');
-    el.innerHTML = '';
+    const list = $('catalog');
+    list.innerHTML = '';
+    $('basins').textContent = basinJob ? '■ Stop basins' : 'Basins';
+    $('basins').disabled = !basinJob && (!catalog.length || !!sweep);
+    $('catalog-count').textContent = catalog.length ? String(catalog.length) : '';
     if (!catalog.length) {
-        el.textContent = sweep ? 'Searching…' : catalogKey ? 'No stable states found.' : '';
+        list.appendChild(
+            el(
+                'div',
+                'empty',
+                sweep ? 'Searching…' : catalogKey ? 'No stable states found.' : 'Run a sweep to catalogue the stable states.',
+            ),
+        );
+        renderTransitions();
         return;
     }
     for (const entry of catalog) {
-        const div = document.createElement('div');
-        div.className = 'catalog-item' + (entry.id === catalogSel ? ' selected' : '');
+        const item = el(
+            'div',
+            'catalog-item' + (entry.id === catalogSel ? ' selected' : '') + (entry.saddle ? ' saddle' : ''),
+        );
+        const bf = basinFraction(entry, catalogRandomStarts);
+        if (bf) {
+            const bar = el('div', 'share');
+            bar.style.width = `${(100 * bf.p).toFixed(1)}%`;
+            item.appendChild(bar);
+        }
         const wmin = Math.sqrt(Math.max(0, entry.lambdaMin) / params.I);
-        div.innerHTML =
-            `<b>#${entry.id}</b> U=${entry.energy.toFixed(4)} ω<sub>min</sub>=${wmin.toFixed(3)}` +
-            ` · ${entry.hits} hit${entry.hits === 1 ? '' : 's'} · orbit ${entry.orbit}` +
-            `<br><span class="tags"></span>`;
-        div.querySelector('.tags').textContent = entry.tags.join(' · ');
-        div.title = 'Click to load this configuration';
-        div.addEventListener('click', () => loadCatalogEntry(entry));
-        el.appendChild(div);
+        const head = el('div', 'head');
+        head.appendChild(el('span', 'sid', `#${entry.id}`));
+        head.appendChild(el('span', 'u', `U = ${entry.energy.toFixed(4)}`));
+        head.appendChild(el('span', 'w', `ωmin ${wmin.toFixed(3)}`));
+        item.appendChild(head);
+        const bits = [`${entry.hits} hit${entry.hits === 1 ? '' : 's'}`, `orbit ${entry.orbit}`];
+        if (bf) bits.push(`basin ${(100 * bf.p).toFixed(0)}% ± ${(100 * bf.err).toFixed(0)}%`);
+        if (entry.basin && entry.basin.volumeFraction !== null && entry.basin.volumeFraction !== undefined)
+            bits.push(`ball ≈ ${(100 * entry.basin.volumeFraction).toFixed(0)}%`);
+        item.appendChild(el('div', 'meta', bits.join(' · ')));
+        const chips = el('div', 'chips');
+        for (const t of entry.tags) {
+            chips.appendChild(el('span', 'chip' + (t === 'saddle point' ? ' bad' : t.startsWith('soft') ? ' warn' : ''), t));
+        }
+        if (entry.basin && entry.basin.nonMonotone > 0)
+            chips.appendChild(el('span', 'chip warn', `${entry.basin.nonMonotone} non-monotone ray(s)`));
+        item.appendChild(chips);
+        item.title = 'Click to load this configuration';
+        item.addEventListener('click', () => loadCatalogEntry(entry));
+        list.appendChild(item);
     }
+    renderTransitions();
+}
+
+function graphInfo(id) {
+    if (id === null) {
+        const g = transitionGraph(catalog);
+        return `${g.edges.length} transition(s) between ${g.nodes.length} state(s) — hover a node, click to load`;
+    }
+    if (id === 0) return 'new: escapes that relaxed to an uncatalogued minimum (explored by the follow-up sweep)';
+    if (id === -1) return 'saddle: escapes that stopped on a saddle / maximum';
+    const entry = catalog.find((e) => e.id === id);
+    if (!entry) return '';
+    const out = transitionGraph(catalog).edges.filter((e) => e.from === id);
+    const barriers = out.map((e) => e.barrier).filter((b) => b !== null);
+    const lowest = barriers.length ? ` · lowest ΔU ${Math.min(...barriers).toFixed(3)}` : '';
+    return `#${id} U=${entry.energy.toFixed(4)} · ${out.length} outgoing transition(s)${lowest}`;
+}
+
+/** Transition graph + per-state escape detail (shown once any state has basin data). */
+function renderTransitions() {
+    const wrap = $('transitions-wrap');
+    if (!catalog.some((e) => e.basin)) {
+        wrap.classList.remove('show');
+        graphLayout = null;
+        return;
+    }
+    wrap.classList.add('show');
+    const shares = new Map();
+    for (const e of catalog) {
+        const bf = basinFraction(e, catalogRandomStarts);
+        if (bf) shares.set(e.id, bf.p);
+    }
+    graphLayout = renderTransitionGraph(graphCv, transitionGraph(catalog), {
+        selected: catalogSel,
+        hover: graphHover,
+        shares,
+    });
+    $('graph-info').textContent = graphInfo(graphHover);
+    renderDetail(catalog.find((e) => e.id === catalogSel) || null);
+}
+
+function renderDetail(entry) {
+    const box = $('state-detail');
+    box.innerHTML = '';
+    if (!entry) {
+        box.appendChild(el('div', 'empty', 'Select a state (in the list or the graph) to see how it can be escaped.'));
+        return;
+    }
+    const head = el('div', 'detail-head');
+    head.appendChild(el('b', null, `#${entry.id}`));
+    head.appendChild(el('span', null, `U = ${entry.energy.toFixed(4)}`));
+    if (entry.saddle) head.appendChild(el('span', 'chip bad', 'saddle — measure-zero basin'));
+    box.appendChild(head);
+    const b = entry.basin;
+    if (!b) {
+        if (!entry.saddle) box.appendChild(el('div', 'empty', 'No basin data yet — run Basins.'));
+        return;
+    }
+    const kv = el('div', 'kv');
+    const row = (k, v, cls = '') => {
+        kv.appendChild(el('span', 'k', k));
+        kv.appendChild(el('span', 'v' + (cls ? ' ' + cls : ''), v));
+    };
+    const bf = basinFraction(entry, catalogRandomStarts);
+    if (bf) row('volume share', `${(100 * bf.p).toFixed(1)}% ± ${(100 * bf.err).toFixed(1)}% (${entry.randomHits}/${catalogRandomStarts} random starts)`);
+    if (b.singles.length)
+        row('single-core escape', b.minSingleRadius !== null ? `δ ≥ ${b.minSingleRadius.toFixed(3)} rad` : 'none within π');
+    if (b.modes.length)
+        row('normal-mode escape', b.minModeRadius !== null ? `δ ≥ ${b.minModeRadius.toFixed(3)}` : 'none within π√n');
+    const rnd = b.randoms ?? [];
+    if (rnd.length) {
+        const esc = rnd.filter((r) => r.escaped).length;
+        row('random rays', `${rnd.length} (${esc} escaped) · mean δ ${b.meanRandomRadius.toFixed(3)}`);
+        if (b.volumeFraction !== null) row('ball estimate', `≈ ${(100 * b.volumeFraction).toFixed(1)}% of configuration space`);
+    }
+    if (b.nonMonotone) row('non-monotone rays', `${b.nonMonotone} ⚠ (radius = smallest escape observed)`, 'warn');
+    const out = transitionGraph(catalog).edges.filter((e) => e.from === entry.id);
+    if (out.length) {
+        out.sort((x, y) => (x.barrier ?? Infinity) - (y.barrier ?? Infinity));
+        row(
+            'transitions',
+            out
+                .map((e) => `→ ${fmtTarget(e.to)} ×${e.count}` + (e.barrier !== null ? ` (ΔU ≥ ${e.barrier.toFixed(3)})` : ''))
+                .join('  '),
+        );
+    }
+    box.appendChild(kv);
+
+    const recs = basinRecords(b);
+    if (!recs.length) {
+        box.appendChild(el('div', 'empty', 'Perturbation searches pending…'));
+        return;
+    }
+    const idOf = (i) => lattice.magnets[i]?.id ?? i;
+    const rows = recs.map((r) => {
+        let kind, ray;
+        if (r.i !== undefined) {
+            kind = 'core';
+            ray = `#${idOf(r.i)} ${fmtSign(r.sign)}`;
+        } else if (r.k !== undefined) {
+            kind = 'mode';
+            ray = `${r.k} (ω ${fmtOmega(r.lambda)}) ${fmtSign(r.sign)}`;
+        } else {
+            kind = 'random';
+            ray = `ray ${r.r}`;
+        }
+        return {kind, ray, r};
+    });
+    rows.sort((a, c) => (a.r.escaped === c.r.escaped ? a.r.radius - c.r.radius : a.r.escaped ? -1 : 1));
+    const wrap = el('div', 'rays-wrap');
+    const table = el('table', 'rays');
+    const thead = el('thead');
+    const hr = el('tr');
+    for (const h of ['kind', 'ray', 'δ', 'ΔU', '→', '']) hr.appendChild(el('th', null, h));
+    thead.appendChild(hr);
+    table.appendChild(thead);
+    const tbody = el('tbody');
+    for (const {kind, ray, r} of rows) {
+        const tr = el('tr', r.escaped ? 'escaped' : 'stays');
+        tr.appendChild(el('td', null, kind));
+        tr.appendChild(el('td', null, ray));
+        tr.appendChild(el('td', null, r.escaped ? r.radius.toFixed(3) : `> ${r.radius.toFixed(2)}`));
+        tr.appendChild(el('td', null, r.escaped && Number.isFinite(r.barrier) ? r.barrier.toFixed(3) : '—'));
+        tr.appendChild(el('td', null, r.escaped ? fmtTarget(r.target) : 'stays'));
+        tr.appendChild(el('td', 'flag', r.monotone === false ? '⚠' : ''));
+        tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    box.appendChild(wrap);
 }
 
 function loadCatalogEntry(entry) {
@@ -767,7 +1045,65 @@ function loadCatalogEntry(entry) {
     persistSoon();
 }
 
+// Transition graph: hover for info, click a node to load the state.
+function graphIdFromEvent(e) {
+    const rect = graphCv.getBoundingClientRect();
+    return graphNodeAt(graphCv, graphLayout, e.clientX - rect.left, e.clientY - rect.top);
+}
+graphCv.addEventListener('pointermove', (e) => {
+    if (!graphLayout) return;
+    const id = graphIdFromEvent(e);
+    if (id === graphHover) return;
+    graphHover = id;
+    graphCv.style.cursor = id !== null && id > 0 ? 'pointer' : 'default';
+    renderTransitions();
+});
+graphCv.addEventListener('pointerleave', () => {
+    if (graphHover === null) return;
+    graphHover = null;
+    renderTransitions();
+});
+graphCv.addEventListener('pointerdown', (e) => {
+    if (!graphLayout) return;
+    const id = graphIdFromEvent(e);
+    if (id !== null && id > 0) {
+        const entry = catalog.find((x) => x.id === id);
+        if (entry) loadCatalogEntry(entry);
+    }
+});
+
 // ---- Import / Export --------------------------------------------------------
+/** Install a catalog from an imported document (theta indices must match: no skipped magnets). */
+function applyCatalogDoc(cat, skipped) {
+    sweep = null;
+    basinJob = null;
+    catalogSel = -1;
+    graphHover = null;
+    $('sweep').textContent = 'Sweep';
+    if (cat && cat.entries.length && skipped === 0) {
+        const positions = lattice.cellPositions();
+        catalog = cat.entries.map((e) => {
+            const theta = Float64Array.from(e.theta);
+            const d = describeState(theta, positions);
+            return {
+                ...e,
+                theta,
+                netMoment: d.netMoment,
+                circulation: d.circulation,
+                staggered: d.staggered,
+                tags: e.tags.slice(),
+            };
+        });
+        catalogRandomStarts = cat.randomStarts;
+        catalogKey = {version: lattice.version, k: params.k, m: params.m};
+    } else {
+        catalog = [];
+        catalogRandomStarts = 0;
+        catalogKey = null;
+    }
+    renderCatalog();
+}
+
 /** Replace the lattice/params with a validated document. Returns the number of skipped magnets. */
 function applyDoc(doc) {
     lattice.clear();
@@ -788,6 +1124,7 @@ function applyDoc(doc) {
     invalidateModes(true);
     syncUI();
     updateCount();
+    applyCatalogDoc(doc.catalog, skipped);
     if (mode === 'sim') {
         stopPlay();
         initSim();
@@ -796,8 +1133,9 @@ function applyDoc(doc) {
 }
 
 $('export').addEventListener('click', () => {
-    $('json').value = exportJSON(lattice, params);
-    setStatus('Exported to text box');
+    const cat = catalogForExport();
+    $('json').value = exportJSON(lattice, params, {catalog: cat});
+    setStatus(cat ? `Exported to text box (with ${cat.entries.length}-state catalog)` : 'Exported to text box');
 });
 
 $('import').addEventListener('click', () => {
@@ -821,6 +1159,7 @@ function syncUI() {
     $('I-val').textContent = params.I.toFixed(1);
     $('gamma').value = params.gamma;
     $('gamma-val').textContent = params.gamma.toFixed(2);
+    $('show-coupling').checked = settings.showCoupling;
 }
 
 // ---- Rendering & animation loop --------------------------------------------
@@ -828,7 +1167,8 @@ function draw() {
     if ((catalog.length || sweep) && catalogStale()) clearCatalog();
     let angles = null,
         modeVec = null,
-        highlight = null;
+        highlight = null,
+        coupling = null;
     if (mode === 'analysis' && modeAnim) {
         const v = modeAnim.modes[modeAnim.idx];
         modeVec = v;
@@ -837,12 +1177,14 @@ function draw() {
         angles = Float64Array.from(modeAnim.base);
         for (let i = 0; i < angles.length; i++) angles[i] += amp * v[i];
         if (heatHover) highlight = [heatHover.i, heatHover.j];
+        if (settings.showCoupling) coupling = modeAnim.C;
     }
     renderer.render(lattice, {
         angles,
         modeVec,
         hover: hoverIdx,
         highlight,
+        coupling,
         showLabels: settings.showLabels,
     });
 }
@@ -859,18 +1201,40 @@ function loop() {
     if (sweep) {
         const finished = sweep.runFor(25);
         catalog = sweep.catalog;
+        catalogRandomStarts = sweep.randomDone;
         const t = performance.now();
         if (finished || t - catalogRenderedAt > 400) {
             renderCatalog();
             catalogRenderedAt = t;
         }
         setStatus(
-            `Sweep ${sweep.done}/${sweep.total}: ${catalog.length} stable state(s), ` +
-                `${sweep.saddles} saddle(s), ${sweep.unconverged} unconverged`,
+            sweep.warm
+                ? `Exploring boundary points ${sweep.done}/${sweep.total}: ${catalog.length} state(s)`
+                : `Sweep ${sweep.done}/${sweep.total}: ${catalog.length} stable state(s), ` +
+                      `${sweep.saddles} saddle(s), ${sweep.unconverged} unconverged`,
         );
+        if (finished) finishSweep(false);
+    }
+    if (basinJob) {
+        const finished = basinJob.runFor(25);
         if (finished) {
-            sweep = null;
-            $('sweep').textContent = 'Sweep';
+            const job = basinJob;
+            basinJob = null;
+            renderCatalog();
+            if (job.seeds.length) {
+                // escapes reached uncatalogued stationary points: catalogue them and relink
+                startWarmSweep(job.seeds);
+            } else {
+                setStatus(`Basin analysis complete for ${catalog.length} state(s)`);
+            }
+            persistSoon();
+        } else {
+            const t = performance.now();
+            if (t - catalogRenderedAt > 400) {
+                renderCatalog();
+                catalogRenderedAt = t;
+            }
+            setStatus(`Basins ${basinJob.done}/${basinJob.total} perturbation searches`);
         }
     }
     requestAnimationFrame(loop);
@@ -888,6 +1252,7 @@ function init() {
     syncUI();
     updateCount();
     updateCursor();
+    renderCatalog();
     draw();
     if (restored) setStatus('Restored previous session');
 }
@@ -906,6 +1271,12 @@ window.__ml = {
     },
     get catalog() {
         return catalog;
+    },
+    get basinJob() {
+        return basinJob;
+    },
+    get sweep() {
+        return sweep;
     },
     step: () => {
         doStep();
