@@ -1,12 +1,21 @@
 {
     "id": "magnet-lattice",
     "title": "Magnet Lattice",
-    "category": "lab",
+    "description": "Explore the dynamics of re-rotating magnets and their emergent behaviors.",
+    "tags": [
+        "physics",
+        "simulation",
+        "dipoles",
+        "lagrangian",
+        "normal-modes",
+        "interactive"
+    ],
+    "category": "labs",
     "href": "index.html",
     "readme": "README.md",
+    "video": "/videos/demo_magnets.mp4",
     "order": 5,
     "section": "featured",
     "icon": "ML",
-    "video": "/videos/demo_magnets.mp4",
     "pitch": "Explore the dynamics of re-rotating magnets and their emergent behaviors."
 }
