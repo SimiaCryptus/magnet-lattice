@@ -76,7 +76,8 @@ export class Lattice {
         for (let i = 0; i < this.magnets.length; i++) {
             const [cx, cy] = this.cellToWorld(this.magnets[i].cell);
             const d = Math.hypot(wx - cx, wy - cy);
-            if (d <= radius && (!best || d < best.dist)) best = {mg: this.magnets[i], idx: i, dist: d};
+            if (d <= radius && (!best || d < best.dist))
+                best = {mg: this.magnets[i], idx: i, dist: d};
         }
         return best;
     }

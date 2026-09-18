@@ -10,31 +10,30 @@ const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const nonNegInt = (v, dflt) => (Number.isInteger(v) && v >= 0 ? v : dflt);
 /** Common fields of a basin perturbation record (the transient `landing` is not persisted). */
 function recToJSON(r) {
-     return {
-         sign: r.sign,
-         radius: r.radius,
-         escaped: r.escaped,
-         target: r.target,
-         barrier: Number.isFinite(r.barrier) ? r.barrier : null,
-         monotone: r.monotone !== false,
-     };
+    return {
+        sign: r.sign,
+        radius: r.radius,
+        escaped: r.escaped,
+        target: r.target,
+        barrier: Number.isFinite(r.barrier) ? r.barrier : null,
+        monotone: r.monotone !== false,
+    };
 }
-
 
 function basinToJSON(b) {
     return {
-         singles: b.singles.map((r) => ({i: r.i, ...recToJSON(r)})),
-         modes: b.modes.map((r) => ({k: r.k, lambda: r.lambda ?? null, ...recToJSON(r)})),
-         randoms: (b.randoms ?? []).map((r) => ({
-             r: r.r,
-             dir: r.dir ? Array.from(r.dir) : null,
-             ...recToJSON(r),
-         })),
+        singles: b.singles.map((r) => ({i: r.i, ...recToJSON(r)})),
+        modes: b.modes.map((r) => ({k: r.k, lambda: r.lambda ?? null, ...recToJSON(r)})),
+        randoms: (b.randoms ?? []).map((r) => ({
+            r: r.r,
+            dir: r.dir ? Array.from(r.dir) : null,
+            ...recToJSON(r),
+        })),
         minSingleRadius: b.minSingleRadius,
         minModeRadius: b.minModeRadius,
-         meanRandomRadius: b.meanRandomRadius ?? null,
-         volumeFraction: b.volumeFraction ?? null,
-         nonMonotone: b.nonMonotone ?? 0,
+        meanRandomRadius: b.meanRandomRadius ?? null,
+        volumeFraction: b.volumeFraction ?? null,
+        nonMonotone: b.nonMonotone ?? 0,
         targets: {...b.targets},
     };
 }
@@ -92,43 +91,51 @@ export function exportJSON(lattice, params, extra = {}) {
 
 function validateBasin(b, path, n) {
     if (typeof b !== 'object' || b === null) throw new Error(`${path} must be an object`);
-     for (const key of ['singles', 'modes', 'randoms']) {
+    for (const key of ['singles', 'modes', 'randoms']) {
         if (b[key] === undefined) b[key] = [];
         if (!Array.isArray(b[key])) throw new Error(`${path}.${key} must be an array`);
         b[key].forEach((r, i) => {
             const p = `${path}.${key}[${i}]`;
             if (typeof r !== 'object' || r === null) throw new Error(`${p} must be an object`);
-            if (!isNum(r.radius) || r.radius < 0) throw new Error(`${p}.radius must be a non-negative number`);
+            if (!isNum(r.radius) || r.radius < 0)
+                throw new Error(`${p}.radius must be a non-negative number`);
             if (r.sign !== 1 && r.sign !== -1) throw new Error(`${p}.sign must be 1 or -1`);
             if (typeof r.escaped !== 'boolean') throw new Error(`${p}.escaped must be boolean`);
             if (r.target === undefined) r.target = null;
             if (r.target !== null && !Number.isInteger(r.target))
                 throw new Error(`${p}.target must be an integer or null`);
-             if (r.barrier === undefined) r.barrier = null;
-             if (r.barrier !== null && !isNum(r.barrier)) throw new Error(`${p}.barrier must be a number or null`);
-             if (r.monotone === undefined) r.monotone = true;
-             if (typeof r.monotone !== 'boolean') throw new Error(`${p}.monotone must be boolean`);
+            if (r.barrier === undefined) r.barrier = null;
+            if (r.barrier !== null && !isNum(r.barrier))
+                throw new Error(`${p}.barrier must be a number or null`);
+            if (r.monotone === undefined) r.monotone = true;
+            if (typeof r.monotone !== 'boolean') throw new Error(`${p}.monotone must be boolean`);
             if (key === 'singles') {
                 if (!Number.isInteger(r.i) || r.i < 0 || r.i >= n)
                     throw new Error(`${p}.i must be a magnet index in [0, ${n})`);
-             } else if (key === 'modes') {
+            } else if (key === 'modes') {
                 if (!Number.isInteger(r.k) || r.k < 0 || r.k >= n)
                     throw new Error(`${p}.k must be a mode index in [0, ${n})`);
                 if (r.lambda === undefined) r.lambda = null;
-                if (r.lambda !== null && !isNum(r.lambda)) throw new Error(`${p}.lambda must be a number or null`);
-             } else {
-                 if (!Number.isInteger(r.r) || r.r < 0) throw new Error(`${p}.r must be a non-negative integer`);
-                 if (r.dir === undefined) r.dir = null;
-                 if (r.dir !== null && (!Array.isArray(r.dir) || r.dir.length !== n || !r.dir.every(isNum)))
-                     throw new Error(`${p}.dir must be null or an array of ${n} numbers`);
+                if (r.lambda !== null && !isNum(r.lambda))
+                    throw new Error(`${p}.lambda must be a number or null`);
+            } else {
+                if (!Number.isInteger(r.r) || r.r < 0)
+                    throw new Error(`${p}.r must be a non-negative integer`);
+                if (r.dir === undefined) r.dir = null;
+                if (
+                    r.dir !== null &&
+                    (!Array.isArray(r.dir) || r.dir.length !== n || !r.dir.every(isNum))
+                )
+                    throw new Error(`${p}.dir must be null or an array of ${n} numbers`);
             }
         });
     }
-     for (const key of ['minSingleRadius', 'minModeRadius', 'meanRandomRadius', 'volumeFraction']) {
+    for (const key of ['minSingleRadius', 'minModeRadius', 'meanRandomRadius', 'volumeFraction']) {
         if (b[key] === undefined) b[key] = null;
-        if (b[key] !== null && !isNum(b[key])) throw new Error(`${path}.${key} must be a number or null`);
+        if (b[key] !== null && !isNum(b[key]))
+            throw new Error(`${path}.${key} must be a number or null`);
     }
-     b.nonMonotone = nonNegInt(b.nonMonotone, 0);
+    b.nonMonotone = nonNegInt(b.nonMonotone, 0);
     if (b.targets === undefined) b.targets = {};
     if (typeof b.targets !== 'object' || b.targets === null || Array.isArray(b.targets))
         throw new Error(`${path}.targets must be an object {id: count}`);
@@ -163,7 +170,10 @@ function validateCatalog(c, n) {
         e.saddle = !!e.saddle;
         e.soft = !!e.soft;
         e.tags = Array.isArray(e.tags) ? e.tags.filter((t) => typeof t === 'string') : [];
-        e.basin = e.basin === undefined || e.basin === null ? null : validateBasin(e.basin, `${p}.basin`, n);
+        e.basin =
+            e.basin === undefined || e.basin === null
+                ? null
+                : validateBasin(e.basin, `${p}.basin`, n);
     });
     return c;
 }
@@ -193,11 +203,17 @@ export function validate(doc) {
     if (!Array.isArray(doc.magnets)) throw new Error('magnets must be an array');
     const seen = new Set();
     doc.magnets.forEach((mg, idx) => {
-        if (typeof mg !== 'object' || mg === null) throw new Error(`magnet[${idx}] must be an object`);
+        if (typeof mg !== 'object' || mg === null)
+            throw new Error(`magnet[${idx}] must be an object`);
         if (!Number.isInteger(mg.id)) throw new Error(`magnet[${idx}].id must be an integer`);
         if (seen.has(mg.id)) throw new Error(`Duplicate magnet id: ${mg.id}`);
         seen.add(mg.id);
-        if (!Array.isArray(mg.cell) || mg.cell.length !== 2 || !isNum(mg.cell[0]) || !isNum(mg.cell[1])) {
+        if (
+            !Array.isArray(mg.cell) ||
+            mg.cell.length !== 2 ||
+            !isNum(mg.cell[0]) ||
+            !isNum(mg.cell[1])
+        ) {
             throw new Error(`magnet[${idx}].cell must be [number,number]`);
         }
         if (doc.grid.snap && (!Number.isInteger(mg.cell[0]) || !Number.isInteger(mg.cell[1]))) {
@@ -206,7 +222,9 @@ export function validate(doc) {
         if (!isNum(mg.theta)) throw new Error(`magnet[${idx}].theta must be a number`);
     });
     doc.catalog =
-        doc.catalog === undefined || doc.catalog === null ? null : validateCatalog(doc.catalog, doc.magnets.length);
+        doc.catalog === undefined || doc.catalog === null
+            ? null
+            : validateCatalog(doc.catalog, doc.magnets.length);
     return doc;
 }
 

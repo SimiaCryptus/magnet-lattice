@@ -181,7 +181,10 @@ describe('analysis: lattice symmetries & stable-state sweep', () => {
             assert(cat[a].id === a + 1, 'ids follow energy order');
             if (a > 0) assert(cat[a].energy >= cat[a - 1].energy, 'sorted by energy');
             for (let b = a + 1; b < cat.length; b++) {
-                assert(!statesEquivalent(cat[a].theta, cat[b].theta, sw.ops), `entries ${a},${b} duplicate`);
+                assert(
+                    !statesEquivalent(cat[a].theta, cat[b].theta, sw.ops),
+                    `entries ${a},${b} duplicate`,
+                );
             }
         }
     });
@@ -198,7 +201,10 @@ describe('analysis: lattice symmetries & stable-state sweep', () => {
             starts: 2,
             catalog: sw.catalog,
             randomStarts: 0,
-            seeds: [[Math.PI, Math.PI], [0.1, -0.1]],
+            seeds: [
+                [Math.PI, Math.PI],
+                [0.1, -0.1],
+            ],
         });
         while (!sw2.runFor(1000));
         assert(sw2.done === 2 && sw2.randomDone === 0 && sw2.catalog.length === 1);
@@ -211,7 +217,10 @@ describe('analysis: basins of attraction', () => {
         const pairs = buildPairs(pos, params);
         const sw = new MinimaSweep(pos, pairs, 2, {starts: 40});
         while (!sw.runFor(1000));
-        assert(sw.randomDone === 40 - 7, `7 structured seeds + 33 random, got ${sw.randomDone} random`);
+        assert(
+            sw.randomDone === 40 - 7,
+            `7 structured seeds + 33 random, got ${sw.randomDone} random`,
+        );
         assert(sw.catalog.length === 1);
         const e = sw.catalog[0];
         assert(e.randomHits <= sw.randomDone && e.randomHits <= e.hits, 'random hits ⊆ hits');
@@ -219,9 +228,16 @@ describe('analysis: basins of attraction', () => {
         assert(bf.p >= 0 && bf.p <= 1 && bf.err >= 0, 'fraction with error bar');
         assert(basinFraction(e, 0) === null, 'no estimate without random starts');
         const hitsBefore = e.hits;
-        const sw2 = new MinimaSweep(pos, pairs, 2, {starts: 10, catalog: sw.catalog, randomStarts: sw.randomDone});
+        const sw2 = new MinimaSweep(pos, pairs, 2, {
+            starts: 10,
+            catalog: sw.catalog,
+            randomStarts: sw.randomDone,
+        });
         while (!sw2.runFor(1000));
-        assert(sw2.catalog.length === 1 && sw2.catalog[0] === e, 'seeded sweep extends the same entries');
+        assert(
+            sw2.catalog.length === 1 && sw2.catalog[0] === e,
+            'seeded sweep extends the same entries',
+        );
         assert(sw2.randomDone === sw.randomDone + 10, 'seeded sweep skips the structured seeds');
         assert(e.hits + sw2.unconverged === hitsBefore + 10, 'hits keep accumulating');
     });
@@ -250,13 +266,19 @@ describe('analysis: basins of attraction', () => {
         assertClose(b.modes.find((r) => r.k === 0).lambda, 1, 1e-6, 'λ0');
         assertClose(b.modes.find((r) => r.k === 1).lambda, 3, 1e-6, 'λ1');
         assertClose(b.minModeRadius, Math.PI / Math.SQRT2, 2e-3, 'min mode radius');
-        assert(b.targets['1'] >= 4, `connectivity counts the 4 mode escapes, got ${JSON.stringify(b.targets)}`);
+        assert(
+            b.targets['1'] >= 4,
+            `connectivity counts the 4 mode escapes, got ${JSON.stringify(b.targets)}`,
+        );
         assert(b.randoms.length === 0 && b.meanRandomRadius === null && b.volumeFraction === null);
         for (const r of b.singles) {
             assert(r.radius > 0 && r.radius <= Math.PI + 1e-12, `single radius ${r.radius}`);
             assert(!r.escaped || [1, 0, -1].includes(r.target), `single target ${r.target}`);
             assert(typeof r.monotone === 'boolean');
-            assert(!r.escaped || (r.barrier >= 0 && r.barrier <= 4 + 1e-9), `single barrier ${r.barrier}`);
+            assert(
+                !r.escaped || (r.barrier >= 0 && r.barrier <= 4 + 1e-9),
+                `single barrier ${r.barrier}`,
+            );
         }
         // transition graph: one node, a self-edge onto the flipped image, lowest barrier along a ray = 1
         const g = transitionGraph(sw.catalog);
@@ -287,7 +309,10 @@ describe('analysis: basins of attraction', () => {
             assert(typeof r.escaped === 'boolean' && typeof r.monotone === 'boolean');
         }
         assert(b.meanRandomRadius > 0, 'mean radius');
-        assert(b.volumeFraction > 0 && b.volumeFraction <= 1, `volume fraction ${b.volumeFraction}`);
+        assert(
+            b.volumeFraction > 0 && b.volumeFraction <= 1,
+            `volume fraction ${b.volumeFraction}`,
+        );
         // closed forms: a disc of radius π covers π/4 of the 2-torus; a segment of half-length π covers the circle
         assertClose(ballVolumeFraction(2, [Math.PI, Math.PI, Math.PI]), Math.PI / 4, 1e-12, 'disc');
         assertClose(ballVolumeFraction(1, [Math.PI]), 1, 1e-12, 'segment');
@@ -296,8 +321,22 @@ describe('analysis: basins of attraction', () => {
     it('saddle entries get no basin record', () => {
         const pairs = buildPairs(pos, params);
         const fake = [
-            {id: 1, theta: new Float64Array([0, 0]), energy: -2, lambdaMin: 1, saddle: false, basin: null},
-            {id: 2, theta: new Float64Array([0, Math.PI]), energy: 2, lambdaMin: -3, saddle: true, basin: null},
+            {
+                id: 1,
+                theta: new Float64Array([0, 0]),
+                energy: -2,
+                lambdaMin: 1,
+                saddle: false,
+                basin: null,
+            },
+            {
+                id: 2,
+                theta: new Float64Array([0, Math.PI]),
+                energy: 2,
+                lambdaMin: -3,
+                saddle: true,
+                basin: null,
+            },
         ];
         const ba = new BasinAnalysis(pos, pairs, 2, fake, {randomDirs: 0});
         assert(ba.total === 8, 'only the minimum is analysed');
@@ -313,8 +352,26 @@ describe('analysis: basins of attraction', () => {
                 saddle: false,
                 basin: {
                     singles: [
-                        {i: 0, sign: 1, radius: 1, escaped: true, target: 0, barrier: 1, monotone: true, landing: new Float64Array([Math.PI, Math.PI])},
-                        {i: 1, sign: 1, radius: 2, escaped: true, target: 0, barrier: 1, monotone: false, landing: new Float64Array([0.5, 0.5])},
+                        {
+                            i: 0,
+                            sign: 1,
+                            radius: 1,
+                            escaped: true,
+                            target: 0,
+                            barrier: 1,
+                            monotone: true,
+                            landing: new Float64Array([Math.PI, Math.PI]),
+                        },
+                        {
+                            i: 1,
+                            sign: 1,
+                            radius: 2,
+                            escaped: true,
+                            target: 0,
+                            barrier: 1,
+                            monotone: false,
+                            landing: new Float64Array([0.5, 0.5]),
+                        },
                     ],
                     modes: [],
                     randoms: [],

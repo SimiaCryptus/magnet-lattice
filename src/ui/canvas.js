@@ -78,7 +78,7 @@ export class SceneRenderer {
      * opts.angles    — optional Float64Array overriding magnet angles (mode preview)
      * opts.modeVec   — optional eigenvector to overlay as wedges
      * opts.hover     — index of hovered magnet (or -1)
-      * opts.highlight — optional array of magnet indices to ring (coupling-matrix hover)
+     * opts.highlight — optional array of magnet indices to ring (coupling-matrix hover)
      * opts.coupling  — optional n×n coupling matrix (normalised Hessian C) drawn as lines
      *                  between the cores: red C_ij > 0, blue C_ij < 0, opacity/width ∝ |C_ij|
      * opts.showLabels— draw magnet ids
@@ -163,13 +163,17 @@ export class SceneRenderer {
                 const [wx, wy] = lattice.cellToWorld(lattice.magnets[i].cell);
                 centres[i] = this.worldToScreen(wx, wy);
             }
-            const hl = highlight && highlight.length === 2 && highlight[0] !== highlight[1] ? highlight : null;
+            const hl =
+                highlight && highlight.length === 2 && highlight[0] !== highlight[1]
+                    ? highlight
+                    : null;
             ctx.lineCap = 'round';
             for (let i = 0; i < n; i++) {
                 for (let j = i + 1; j < n; j++) {
                     const v = coupling[i][j];
                     const a = Math.min(1, Math.abs(v));
-                    const isHl = hl && ((hl[0] === i && hl[1] === j) || (hl[0] === j && hl[1] === i));
+                    const isHl =
+                        hl && ((hl[0] === i && hl[1] === j) || (hl[0] === j && hl[1] === i));
                     if (a < 0.03 && !isHl) continue; // far pairs (1/r³) would only add clutter
                     const [x0, y0] = centres[i],
                         [x1, y1] = centres[j];
@@ -187,7 +191,8 @@ export class SceneRenderer {
                         ctx.lineWidth = 3;
                     } else {
                         const alpha = 0.15 + 0.75 * a;
-                        ctx.strokeStyle = v > 0 ? `rgba(230,90,90,${alpha})` : `rgba(90,130,230,${alpha})`;
+                        ctx.strokeStyle =
+                            v > 0 ? `rgba(230,90,90,${alpha})` : `rgba(90,130,230,${alpha})`;
                         ctx.lineWidth = 0.75 + 3 * a;
                     }
                     ctx.stroke();
@@ -202,7 +207,8 @@ export class SceneRenderer {
         lattice.magnets.forEach((mg, idx) => {
             const [wx, wy] = lattice.cellToWorld(mg.cell);
             const [sx, sy] = this.worldToScreen(wx, wy);
-            if (sx < -margin || sy < -margin || sx > this.w + margin || sy > this.h + margin) return;
+            if (sx < -margin || sy < -margin || sx > this.w + margin || sy > this.h + margin)
+                return;
 
             const th = angles ? angles[idx] : mg.theta;
             const ex = Math.cos(th),
@@ -216,14 +222,14 @@ export class SceneRenderer {
                 ctx.lineWidth = 1.5;
                 ctx.stroke();
             }
-             // coupling highlight ring
-             if (highlight && highlight.includes(idx)) {
-                 ctx.beginPath();
-                 ctx.arc(sx, sy, R + 8, 0, Math.PI * 2);
-                 ctx.strokeStyle = '#fc6';
-                 ctx.lineWidth = 2.5;
-                 ctx.stroke();
-             }
+            // coupling highlight ring
+            if (highlight && highlight.includes(idx)) {
+                ctx.beginPath();
+                ctx.arc(sx, sy, R + 8, 0, Math.PI * 2);
+                ctx.strokeStyle = '#fc6';
+                ctx.lineWidth = 2.5;
+                ctx.stroke();
+            }
 
             // disk
             ctx.beginPath();

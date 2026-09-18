@@ -190,7 +190,11 @@ export function latticeSymmetries(positions, tol = 1e-6) {
                 ty = c * x + d * y + cy;
             let found = -1;
             for (let j = 0; j < n; j++) {
-                if (!used[j] && Math.abs(positions[j][0] - tx) < tol && Math.abs(positions[j][1] - ty) < tol) {
+                if (
+                    !used[j] &&
+                    Math.abs(positions[j][0] - tx) < tol &&
+                    Math.abs(positions[j][1] - ty) < tol
+                ) {
                     found = j;
                     break;
                 }
@@ -360,7 +364,10 @@ export function summarizeBasin(b, n) {
         let s = 0;
         for (const r of b.randoms) s += r.radius;
         b.meanRandomRadius = s / b.randoms.length;
-        b.volumeFraction = ballVolumeFraction(n, b.randoms.map((r) => r.radius));
+        b.volumeFraction = ballVolumeFraction(
+            n,
+            b.randoms.map((r) => r.radius),
+        );
     } else {
         b.meanRandomRadius = null;
         b.volumeFraction = null;
@@ -427,7 +434,8 @@ export function transitionGraph(catalog) {
                 edges.set(key, ed);
             }
             ed.count++;
-            if (Number.isFinite(r.barrier) && (ed.barrier === null || r.barrier < ed.barrier)) ed.barrier = r.barrier;
+            if (Number.isFinite(r.barrier) && (ed.barrier === null || r.barrier < ed.barrier))
+                ed.barrier = r.barrier;
         }
     }
     return {nodes, edges: [...edges.values()]};
@@ -476,7 +484,8 @@ export class MinimaSweep {
         if (opts.seeds) {
             this._seeds = opts.seeds.map((s) => Float64Array.from(s));
             // tiny jitter so seeds sitting exactly on a saddle can escape
-            for (const s of this._seeds) for (let i = 0; i < n; i++) s[i] += 1e-2 * (this.random() - 0.5);
+            for (const s of this._seeds)
+                for (let i = 0; i < n; i++) s[i] += 1e-2 * (this.random() - 0.5);
         } else {
             this._seeds = this.catalog.length ? [] : this._structuredSeeds();
         }
@@ -486,7 +495,8 @@ export class MinimaSweep {
     _structuredSeeds() {
         const {n, positions} = this;
         const seeds = [];
-        for (const a of [0, Math.PI / 2, Math.PI / 4, -Math.PI / 4]) seeds.push(new Float64Array(n).fill(a));
+        for (const a of [0, Math.PI / 2, Math.PI / 4, -Math.PI / 4])
+            seeds.push(new Float64Array(n).fill(a));
         const checker = new Float64Array(n),
             rows = new Float64Array(n),
             cols = new Float64Array(n);
@@ -684,7 +694,9 @@ export class BasinAnalysis {
             if (doSingles) {
                 for (let i = 0; i < n; i++) {
                     for (const sign of [1, -1]) {
-                        this.tasks.push(this._task(entry, {kind: 'single', i, sign, dir: null, hiMax: Math.PI}));
+                        this.tasks.push(
+                            this._task(entry, {kind: 'single', i, sign, dir: null, hiMax: Math.PI}),
+                        );
                     }
                 }
             }
@@ -693,13 +705,28 @@ export class BasinAnalysis {
                 for (let k = 0; k < n; k++) {
                     for (const sign of [1, -1]) {
                         this.tasks.push(
-                            this._task(entry, {kind: 'mode', k, lambda: values[k], sign, dir: vectors[k], hiMax}),
+                            this._task(entry, {
+                                kind: 'mode',
+                                k,
+                                lambda: values[k],
+                                sign,
+                                dir: vectors[k],
+                                hiMax,
+                            }),
                         );
                     }
                 }
             }
             for (let r = 0; r < randomDirs; r++) {
-                this.tasks.push(this._task(entry, {kind: 'random', r, sign: 1, dir: this._randomDirection(), hiMax}));
+                this.tasks.push(
+                    this._task(entry, {
+                        kind: 'random',
+                        r,
+                        sign: 1,
+                        dir: this._randomDirection(),
+                        hiMax,
+                    }),
+                );
             }
         }
         this.total = this.tasks.length;
@@ -796,13 +823,18 @@ export class BasinAnalysis {
         const checks = [];
         if (task.hi === null) {
             // never escaped within range: sample the interior, all expected to return
-            for (let k = 1; k <= m; k++) checks.push({a: (task.hiMax * k) / (m + 1), expectStay: true});
+            for (let k = 1; k <= m; k++)
+                checks.push({a: (task.hiMax * k) / (m + 1), expectStay: true});
         } else {
             const below = Math.floor(m / 2),
                 above = m - below;
-            for (let k = 1; k <= below; k++) checks.push({a: (task.lo * k) / (below + 1), expectStay: true});
+            for (let k = 1; k <= below; k++)
+                checks.push({a: (task.lo * k) / (below + 1), expectStay: true});
             for (let k = 1; k <= above; k++) {
-                checks.push({a: task.hi + ((task.hiMax - task.hi) * k) / (above + 1), expectStay: false});
+                checks.push({
+                    a: task.hi + ((task.hiMax - task.hi) * k) / (above + 1),
+                    expectStay: false,
+                });
             }
         }
         task.checks = checks.filter((c) => c.a > 1e-9 && c.a <= task.hiMax + 1e-12);

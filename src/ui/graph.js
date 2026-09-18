@@ -200,7 +200,14 @@ export function renderTransitionGraph(canvas, graph, opts = {}) {
             ctx.shadowColor = 'rgba(79,209,165,0.65)';
             ctx.shadowBlur = 14;
         }
-        const grad = ctx.createRadialGradient(nd.x - nd.r * 0.3, nd.y - nd.r * 0.35, 1, nd.x, nd.y, nd.r);
+        const grad = ctx.createRadialGradient(
+            nd.x - nd.r * 0.3,
+            nd.y - nd.r * 0.35,
+            1,
+            nd.x,
+            nd.y,
+            nd.r,
+        );
         grad.addColorStop(0, saddle ? '#8a5c66' : '#4f92da');
         grad.addColorStop(1, saddle ? '#4d2f38' : '#234c7c');
         ctx.fillStyle = grad;

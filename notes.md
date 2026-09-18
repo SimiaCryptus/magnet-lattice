@@ -1,4 +1,5 @@
 Done:
+
 - inter-basin connectivity graph (nodes = catalog states by energy, edges = escape targets,
   width ∝ count, label/colour = energy climbed along the ray) — `src/ui/graph.js`
 - random-direction basin probing → direction-averaged radius + rough ball-volume fraction
@@ -10,6 +11,7 @@ Done:
 - state list and transition analysis split into separate cards; restyled UI
 
 Ideas:
+
 - barrier from a proper saddle search (nudged elastic band / dimer) instead of the ray maximum
 - graph layout that avoids overlapping labels for large catalogs (force-directed x, energy y)
 - export the transition graph as DOT / CSV

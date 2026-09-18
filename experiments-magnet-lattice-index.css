@@ -25,7 +25,13 @@ body {
 
 body {
     margin: 0;
-    font-family: system-ui, -apple-system, 'Segoe UI', Inter, Roboto, sans-serif;
+    font-family:
+        system-ui,
+        -apple-system,
+        'Segoe UI',
+        Inter,
+        Roboto,
+        sans-serif;
     font-size: 13px;
     background: var(--bg);
     color: var(--text);

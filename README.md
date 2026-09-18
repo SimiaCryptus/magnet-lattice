@@ -31,11 +31,11 @@ This project lets you:
   the natural resonant patterns ("normal modes") the lattice likes to
   vibrate in, and watch an animation of any one of them.
 - **Map the landscape** — sweep many random starts to catalogue every
-   stable arrangement, then probe how far each one can be pushed (per
-   magnet, per normal mode and along random directions) before it tips
-   into another. The result is drawn as a transition graph: states placed
-   by energy, arrows weighted by how often a push led there and labelled
-   with the energy it took.
+  stable arrangement, then probe how far each one can be pushed (per
+  magnet, per normal mode and along random directions) before it tips
+  into another. The result is drawn as a transition graph: states placed
+  by energy, arrows weighted by how often a push led there and labelled
+  with the energy it took.
 
 You can also copy your arrangement out as a small chunk of JSON text (and
 paste one back in), so you can save interesting layouts, share them, or

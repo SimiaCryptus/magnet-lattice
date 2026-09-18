@@ -71,7 +71,8 @@ describe('io: JSON round-trip & validation', () => {
         const params = {k: 2.5, I: 0.7, gamma: 0.1, m: 1.2};
         const doc = importJSON(exportJSON(l, params));
         assert(doc.grid.pitch === 32 && doc.grid.snap === true && doc.grid.extent === 4);
-        for (const key of Object.keys(params)) assertClose(doc.params[key], params[key], 1e-15, key);
+        for (const key of Object.keys(params))
+            assertClose(doc.params[key], params[key], 1e-15, key);
         assert(doc.magnets.length === 2);
         const l2 = new Lattice(doc.grid.pitch, doc.grid.snap, doc.grid.extent);
         for (const mg of doc.magnets) l2.add(mg.cell, mg.theta, mg.id);
@@ -143,7 +144,7 @@ describe('io: JSON round-trip & validation', () => {
                     modes: [{k: 0, lambda: 1, sign: -1, radius: 2.22, escaped: true, target: 1}],
                     minSingleRadius: 3.14,
                     minModeRadius: 2.22,
-                    targets: {'-1': 1, '1': 1},
+                    targets: {'-1': 1, 1: 1},
                 },
             },
         ];
@@ -156,9 +157,15 @@ describe('io: JSON round-trip & validation', () => {
         assert(e.hits === 12 && e.randomHits === 9 && e.orbit === 2);
         assert(e.tags[0] === 'ferromagnetic (all aligned)');
         assert(e.basin.singles[0].target === -1 && e.basin.modes[0].lambda === 1);
-         assert(e.basin.singles[0].monotone === true && e.basin.singles[0].barrier === null, 'record defaults');
-         assert(Array.isArray(e.basin.randoms) && e.basin.randoms.length === 0, 'randoms default to []');
-         assert(e.basin.volumeFraction === null && e.basin.nonMonotone === 0, 'summary defaults');
+        assert(
+            e.basin.singles[0].monotone === true && e.basin.singles[0].barrier === null,
+            'record defaults',
+        );
+        assert(
+            Array.isArray(e.basin.randoms) && e.basin.randoms.length === 0,
+            'randoms default to []',
+        );
+        assert(e.basin.volumeFraction === null && e.basin.nonMonotone === 0, 'summary defaults');
         assertClose(e.basin.minModeRadius, 2.22, 1e-15);
         assert(e.basin.targets['1'] === 1 && e.basin.targets['-1'] === 1);
         // theta length must match the magnet count
